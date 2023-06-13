@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:experimental
+# syntax = docker/dockerfile:experimental
 ARG GO_VERSION=1.19
 ARG DEBIAN_VERSION=11
 FROM golang:${GO_VERSION} as base
@@ -16,7 +16,7 @@ COPY . /workspace
 RUN --mount=type=cache,target=/root/.cache/go-build \
     go build
 
-FROM alpine:${DEBIAN_VERSION} as prod
+FROM debian:${DEBIAN_VERSION} as prod
 WORKDIR /workspace
 COPY --from=builder /workspace/yaml_evaluator /
 ENTRYPOINT /yaml_evaluator

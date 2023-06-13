@@ -1,0 +1,30 @@
+---
+version: "0"
+
+arguments:
+  vscode_devcontainer:
+    project_name: test project.
+    attach_service: base_shell
+    source_path: ../test_project
+  docker_compose:
+    project_prefix: test_project_dev
+    files:
+      - !Sub
+        - "${source_entrypoint}/docker-compose.yml"
+        - source_entrypoint: !Var arguments.vscode_devcontainer.source_path
+    vscode_extension_volumes:
+      normal: vscode-extensions
+      insider: vscode-insider-extensions
+
+collections:
+  path: ../../museum-collections
+  list:
+    - # (must) specifying usiong collection path with relative path from collections.path
+      path: ./base_shell
+    - # (optional) docker-compose.yml service name.
+      # if it's not specified, it's assigned the basename of path
+      name: go
+      path: ./go/cli
+      # (optional) not merging docker-compose.yml
+      # (default value): false
+      no_compose: true

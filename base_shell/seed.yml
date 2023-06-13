@@ -3,38 +3,33 @@ version: "0"
 
 variables:
   arguments:
-    common:
-      user_name: vscode
-    devcontainer:
-      name: Test project.
+    vscode_devcontainer:
       working_directory: /workspace
-      container_terminal_cwd: ./src
+      user_name: vscode
     docker_compose:
       build:
         dockerfile: Dockerfile
       host_mountpoint_path: ".."
-      volume_name:
-        vscode_extension: vscode-extensions
-        vscode_insider_extension: vscode-insider-extensions
   let:
     common:
       service_name: !Const collection.name
+      container_terminal_cwd: !Var .common.arguments.vscode_devcontainer.source_path
       home_dir:
         !If
         - !Equals
-          - !Var arguments.common.user_name
+          - !Var arguments.vscode_devcontainer.user_name
           - "root"
         - "/root"
         - !Sub
           - "/home/${UserName}"
-          - UserName: !Var arguments.common.user_name
-    devcontainer:
+          - UserName: !Var arguments.vscode_devcontainer.user_name
+    vscode_devcontainer:
       terminal_absolute_cwd:
         !Join
         - "/"
         -
           - "${containerWorkspaceFolder}"
-          - !Var arguments.devcontainer.container_terminal_cwd
+          - !Var let.common.container_terminal_cwd
     docker_compose:
       build:
         context:
@@ -46,54 +41,48 @@ variables:
           !Sub
           - "${HostMountPath}:${ContainerWorkingDirectory}:cached"
           - HostMountPath: !Var arguments.docker_compose.host_mountpoint_path
-            ContainerWorkingDirectory: !Var arguments.devcontainer.working_directory
+            ContainerWorkingDirectory: !Var arguments.vscode_devcontainer.working_directory
         vscode_extension:
-          !Sub
-          - "${ExtensionVolumeName}:${HomeDirectory}/.vscode-server/extensions"
-          - ExtensionVolumeName: !Var arguments.docker_compose.volume_name.vscode_extension
-            HomeDirectory: !Var let.common.home_dir
+          !If
+          - !Defined .common.arguments.docker_compose.vscode_extension_volumes.normal
+          - !Sub
+            - "${ExtensionVolumeName}:${HomeDirectory}/.vscode-server/extensions"
+            - ExtensionVolumeName: !Var .common.arguments.docker_compose.vscode_extension_volumes.normal
+              HomeDirectory: !Var let.common.home_dir
+          - null
         vscode_insider_extension:
-          !Sub
-          - "${InsiderExtensionVolumeName}:${HomeDirectory}/.vscode-insider-server/extensions"
-          - InsiderExtensionVolumeName: !Var arguments.docker_compose.volume_name.vscode_insider_extension
-            HomeDirectory: !Var let.common.home_dir
+          !If
+          - !Defined .common.arguments.docker_compose.vscode_extension_volumes.normal
+          - !Sub
+            - "${InsiderExtensionVolumeName}:${HomeDirectory}/.vscode-insider-server/extensions"
+            - InsiderExtensionVolumeName: !Var .common.arguments.docker_compose.vscode_extension_volumes.insider
+              HomeDirectory: !Var let.common.home_dir
+          - null
 
 configs:
   vscode_devcontainer:
-    # For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
-    # https://github.com/microsoft/vscode-dev-containers/tree/v0.209.6/containers/docker-from-docker-compose
-    name: !Var arguments.devcontainer.name
-    dockerComposeFile:
-      # Enter your docker-compose.yml path in source file.
-      - ./docker-compose.yml
-    service: !Var let.common.service_name
-    workspaceFolder: !Var arguments.devcontainer.working_directory
-    # Use this environment variable if you need to bind mount your local source code into a new container.
+    workspaceFolder: !Var arguments.vscode_devcontainer.working_directory
     remoteEnv:
       LOCAL_WORKSPACE_FOLDER: ${localWorkspaceFolder}
       CONTAINER_WORKSPACE_FOLDER: ${containerWorkspaceFolder}
       PATH: ${containerWorkspaceFolder}/.devcontainer/bin/user:${containerEnv:PATH}
       HISTFILE: ${containerWorkspaceFolder}/.devcontainer/.zhistory
-    # Set *default* container specific settings.json values on container create.
-    settings:
-      terminal.integrated.cwd: !Var let.devcontainer.terminal_absolute_cwd
-      git-graph.maxDepthOfRepoSearch: 1
-    # Add the IDs of extensions you want installed when the container is created.
-    extensions:
-      - ms-azuretools.vscode-docker
-      - wmaurer.vscode-jumpy
-      - oderwat.indent-rainbow
-      - mosapride.zenkaku
-      - christian-kohler.path-intellisense
-      - streetsidesoftware.code-spell-checker
-      - eamodio.gitlens
-      - mhutchie.git-graph
-      - yzhang.markdown-all-in-one
-    # Use 'forwardPorts' to make a list of ports inside the container available locally.
-    # forwardPorts: []
-    # Use 'postCreateCommand' to run commands after the container is created.
-    # postCreateCommand: ""
-    remoteUser: !Var arguments.common.user_name
+    customizations:
+      vscode:
+        settings:
+          terminal.integrated.cwd: !Var let.vscode_devcontainer.terminal_absolute_cwd
+          git-graph.maxDepthOfRepoSearch: 1
+        extensions:
+          - ms-azuretools.vscode-docker
+          - wmaurer.vscode-jumpy
+          - oderwat.indent-rainbow
+          - mosapride.zenkaku
+          - christian-kohler.path-intellisense
+          - streetsidesoftware.code-spell-checker
+          - eamodio.gitlens
+          - mhutchie.git-graph
+          - yzhang.markdown-all-in-one
+    remoteUser: !Var arguments.vscode_devcontainer.user_name
   docker_compose:
     version: "3.7"
     services:
@@ -105,8 +94,8 @@ configs:
           # Forwards the local Docker socket to the container.
           - /var/run/docker.sock:/var/run/docker-host.sock
           - !Var let.docker_compose.mount_setting.container_working_directory
-          - !Var let.docker_compose.mount_setting.vscode_extension
-          - !Var let.docker_compose.mount_setting.vscode_insider_extension
+          - !Var? let.docker_compose.mount_setting.vscode_extension
+          - !Var? let.docker_compose.mount_setting.vscode_insider_extension
         # Overrides default command so things don't shut down after the process ends.
         entrypoint: /usr/local/share/docker-init.sh
         command: sleep infinity
@@ -116,9 +105,6 @@ configs:
         # security_opt:
         #   - seccomp:unconfined
         # Uncomment the next line to use a non-root user for all processes.
-        user: !Var arguments.common.user_name
+        user: !Var arguments.vscode_devcontainer.user_name
         # Use "forwardPorts" in **devcontainer.json** to forward an app port locally.
         # (Adding the "ports" property to this file will not forward from a Codespace.)
-    volumes:
-      !Var arguments.docker_compose.volume_name.vscode_extension:
-      !Var arguments.docker_compose.volume_name.vscode_insider_extension:
