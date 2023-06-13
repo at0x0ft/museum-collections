@@ -3,19 +3,16 @@ version: "0"
 
 variables:
   arguments:
-    common:
-      user_name: vscode
-    devcontainer:
-      name: Test project.
-      working_directory: /workspace
-      container_terminal_cwd: ./src
     docker_compose:
       build:
         dockerfile: Dockerfile
         args:
           go_version: 1.19
           debian_version: 11-slim
-      host_mountpoint_path: ".."
+      working_directory: /workspace
+      mountpoints:
+        - src: !Var .common.arguments.vscode_devcontainer.source_path
+          dst: !Var arguments.docker_compose.working_directory
   let:
     common:
       service_name:
@@ -33,13 +30,6 @@ variables:
             - !Var let.common.service_name.prefix
             - "dev"
         production: !Var let.common.service_name.prefix
-    devcontainer:
-      terminal_absolute_cwd:
-        !Join
-        - "/"
-        -
-          - "${containerWorkspaceFolder}"
-          - !Var arguments.devcontainer.container_terminal_cwd
     docker_compose:
       build:
         context:
@@ -62,14 +52,16 @@ variables:
       mount_setting:
         container_working_directory:
           !Sub
-          - "${HostMountPath}:${ContainerWorkingDirectory}:cached"
-          - HostMountPath: !Var arguments.docker_compose.host_mountpoint_path
-            ContainerWorkingDirectory: !Var arguments.devcontainer.working_directory
+          - "${HostMountPoint}:${ContainerMountPoint}:cached"
+          - HostMountPoint: !Var arguments.docker_compose.mountpoints[0].src
+            ContainerMountPoint: !Var arguments.docker_compose.mountpoints[0].dst
 
 configs:
   vscode_devcontainer:
-    extensions:
-      - golang.go
+    customizations:
+      vscode:
+        extensions:
+          - golang.go
   docker_compose:
     services:
       !Var let.common.service_name.base:
@@ -79,16 +71,16 @@ configs:
           args:
             - !Var let.docker_compose.build.args.go_version
             - !Var let.docker_compose.build.args.debian_version
-        working_dir: !Var arguments.devcontainer.working_directory
+        working_dir: !Var arguments.docker_compose.working_directory
       !Var let.common.service_name.development:
         build:
           <<: *go_build_config
           target: base
-        working_dir: !Var arguments.devcontainer.working_directory
+        working_dir: !Var arguments.docker_compose.working_directory
         volumes:
           - !Var let.docker_compose.mount_setting.container_working_directory
       !Var let.common.service_name.production:
         build:
           <<: *go_build_config
           target: prod
-        working_dir: !Var arguments.devcontainer.working_directory
+        working_dir: !Var arguments.docker_compose.working_directory
